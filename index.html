@@ -12,11 +12,16 @@
     <input type="file" id="myfile" name="myfile">
     <br />
     <br />
+    <label for="bins_noise_input">Bins Noise Factor:</label>
+    <input type="number" id="bins_noise_input" name="bins_noise_input" value="10">
+    <br />
+    <br />
     <div id="print_output"></div>
     <br />
     <p>File Content:</p>
       <div id="content"></div>
       <div id="graph-area"></div>
+
 
     <py-env>
       - pandas
@@ -42,7 +47,7 @@
     def fit(noise, factor=1):
         bins_noise = noise.max() - noise.min()
         bins, bin_edges = np.histogram(noise, bins=int(bins_noise / factor))
-        
+
         initial_amplitude = np.max(bins)
         initial_std = np.std(noise)
         initial_mean = np.mean(noise)
@@ -54,8 +59,12 @@
 
         return bins, bin_edges, amplitude_fit, mean_fit, stddev_fit
 
-    async def process_file(event):
-        fileList = event.target.files.to_py()
+    async def process_file(event=None):
+        fileList = document.getElementById("myfile").files.to_py()
+        if not fileList:
+            return
+
+        bins_noise_factor = int(document.getElementById("bins_noise_input").value)
 
         for f in fileList:
             data = await f.text()
@@ -65,11 +74,11 @@
             noise = noise[noise > 1]
             noise = noise[noise < 100000]
 
-            bins, bin_edges, amplitude_fit, mean_fit, stddev_fit = fit(noise, factor=10)
+            bins, bin_edges, amplitude_fit, mean_fit, stddev_fit = fit(noise, factor=bins_noise_factor)
             y_fit = gaussian(bin_edges[:-1], amplitude_fit, mean_fit, stddev_fit)
 
             lod = mean_fit + (4 * stddev_fit)
-            document.getElementById("content").innerHTML = f"LOD (a.u.): {lod}"
+            document.getElementById("content").innerHTML = f"LOD: {lod}"
 
             plt.figure()
             plt.xlim(0, 2*lod)
@@ -95,8 +104,13 @@
 
     def main():
         file_event = create_proxy(process_file)
+        bins_event = create_proxy(process_file)
+
         e = document.getElementById("myfile")
         e.addEventListener("change", file_event, False)
+
+        bins_input = document.getElementById("bins_noise_input")
+        bins_input.addEventListener("input", bins_event, False)
 
     main()
     </py-script>
