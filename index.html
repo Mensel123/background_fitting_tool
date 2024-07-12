@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width,initial-scale=1" />
+      <title>🦜 Polyglot - Piratical PyScript</title>
+      <script type="module" src="https://pyscript.net/releases/2023.11.1/core.js"></script>
+  </head>
+  <body>
+    <h1>FCS reader</h1>
+    <label for="myfile">Select a file:</label>
+    
+    <input type="file" id="fileinput" name="fileInput"/>
+    <br />
+    <br />
+    <div id="print_output"></div>
+    <br />
+    <p>File Header:</p>
+    <div id="content">
+    </div>
+
+    <script type="py" src="./main.py" config="./pyscript.json"></script>
+  </body>
+  
+</html>
