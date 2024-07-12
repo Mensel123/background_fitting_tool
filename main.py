@@ -15,7 +15,7 @@ async def get_file(e):
 
         df = pd.read_csv(file_content)
 
-        js.document.getElementById("content").innerHTML = df.columns
+        js.document.getElementById("content").innerHTML = df.columns[0]
 
 
 def main():
