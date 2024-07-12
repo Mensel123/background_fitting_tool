@@ -1,150 +1,194 @@
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>File System Examples</title>
-    <link rel="stylesheet" href="https://pyscript.net/alpha/pyscript.css" />
-    <script defer src="https://pyscript.net/alpha/pyscript.js"></script>
-  </head>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Flow Cytometer Background Noise Fitting</title>
+  <link rel="stylesheet" href="https://pyscript.net/alpha/pyscript.css" />
+  <script defer src="https://pyscript.net/alpha/pyscript.js"></script>
   <style>
-      h1 {
-       font-size: 20px;
-       text-transform: uppercase;
-       text-align: center;
-       margin: 0 0 35px 0;
-       text-shadow: 0px 1px 0px #f2f2f2;
-         }
+    /* Ensure the styles are applied correctly */
+    h1 {
+      font-size: 20px;
+      text-transform: uppercase;
+      text-align: center;
+      margin: 0 0 35px 0;
+      text-shadow: 0px 1px 0px #f2f2f2;
+    }
 
-       </style>
-  <body>
-    <h1>Tool for fitting background noise of a flow cytometer</h1>
+    ol {
+      font-size: 16px;
+      color: #333;
+      padding-left: 20px; /* Ensure there is space for the numbers */
+    }
 
-    <label for="myfile">Select an csv file containing your background noise:</label>
-    <input type="file" id="myfile" name="myfile">
-    <br />
-    <br />
-    <label for="bins_noise_input">Bins Noise Factor:</label>
-    <input type="number" id="bins_noise_input" name="bins_noise_input" value="10"  style="background-color:DodgerBlue;">
-    <br />
-    <br />
-    <div id="print_output"></div>
-    <br />
-    <p>Fittings results:</p>
-      <div id="mean"></div>
-      <div id="std"></div>
+    li {
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tool for fitting background noise of a flow cytometer</h1>
 
-      <div id="lod"></div>
-      <div id="graph-area"></div>
-    <br/>
-    <br/>
-    <p>
-        Steps taken
-    </p>
-    <ol>
-        <li>1. Determine approximate mean, height, and standard deviation</li>
-        <li>2. Fit gaussian function with approximate values as starting point</li>
-        <li>3. Determine mean and standard deviation based on fit</li>
-        <li>4. Calculate LoD: mean + 4*std</li>
-    </ol>
+  <label for="myfile">Select an FCS file:</label>
+  <input type="file" id="myfile" name="myfile">
+  <br /><br />
+  <div id="fcs_header"></div>
+  <br />
+  <label for="channel_select">Select Channel:</label>
+  <select id="channel_select" name="channel_select"></select>
+  <br /><br />
+  <label for="bins_noise_input">Bins Noise Factor:</label>
+  <input type="number" id="bins_noise_input" name="bins_noise_input" value="10"  style="background-color:DodgerBlue;">
+  <br /><br />
+  <div id="print_output"></div>
+  <br />
+  <p>Fitting results:</p>
+  <div id="mean"></div>
+  <div id="std"></div>
+  <div id="lod"></div>
+  <div id="graph-area"></div>
+  <br /><br />
+  <p>Steps taken</p>
+  <ol>
+    <li>Determine approximate mean, height, and standard deviation</li>
+    <li>Fit Gaussian function with approximate values as starting point</li>
+    <li>Determine mean and standard deviation based on fit</li>
+    <li>Calculate LoD: mean + 4*std</li>
+  </ol>
 
-    <py-env>
-      - pandas
-      - scipy
-      - numpy
-      - matplotlib
-    </py-env>
+  <py-env>
+    - pandas
+    - scipy
+    - numpy
+    - matplotlib
+    - flowio
+  </py-env>
 
-    <py-script output="print_output">
-    import asyncio
-    from js import document, FileReader
-    from pyodide import create_proxy
-    import pandas as pd
-    import io
+  <py-script output="print_output">
+import asyncio
+from js import document, Uint8Array
+from pyodide import create_proxy
+import io
+import numpy as np
+from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
+import flowio
 
-    import numpy as np
-    from scipy.optimize import curve_fit
-    import matplotlib.pyplot as plt
+def gaussian(x, amplitude, mean, stddev):
+    return amplitude * np.exp(-(x - mean)**2 / (2 * stddev**2))
 
-    def gaussian(x, amplitude, mean, stddev):
-        return amplitude * np.exp(-(x - mean)**2 / (2 * stddev**2))
+def fit(noise, factor=1):
+    bins_noise = noise.max() - noise.min()
+    bins, bin_edges = np.histogram(noise, bins=int(bins_noise / factor))
 
-    def fit(noise, factor=1):
-        bins_noise = noise.max() - noise.min()
-        bins, bin_edges = np.histogram(noise, bins=int(bins_noise / factor))
+    initial_amplitude = np.max(bins)
+    initial_std = np.std(noise)
+    initial_mean = np.mean(noise)
 
-        initial_amplitude = np.max(bins)
-        initial_std = np.std(noise)
-        initial_mean = np.mean(noise)
+    initial_guess = [initial_amplitude, initial_mean, initial_std]
+    params, covariance = curve_fit(gaussian, bin_edges[:-1], bins, p0=initial_guess)
 
-        initial_guess = [initial_amplitude, initial_mean, initial_std]
-        params, covariance = curve_fit(gaussian, bin_edges[:-1], bins, p0=initial_guess)
+    amplitude_fit, mean_fit, stddev_fit = params
 
-        amplitude_fit, mean_fit, stddev_fit = params
+    return bins, bin_edges, amplitude_fit, mean_fit, stddev_fit
 
-        return bins, bin_edges, amplitude_fit, mean_fit, stddev_fit
+async def process_file(event=None):
+    global events  # Declare events as a global variable to be accessible in both functions
 
-    async def process_file(event=None):
-        fileList = document.getElementById("myfile").files.to_py()
-        if not fileList:
+    fileList = document.getElementById("myfile").files.to_py()
+    if not fileList:
+        return
+
+    bins_noise_factor = int(document.getElementById("bins_noise_input").value)
+
+    for f in fileList:
+        try:
+            array_buf = await f.arrayBuffer()
+            file_bytes = Uint8Array.new(array_buf).to_py()
+            file_content = io.BytesIO(file_bytes)
+            flow_data = flowio.FlowData(file_content, ignore_offset_error=True)
+
+            # Display FCS header
+            # document.getElementById("fcs_header").innerHTML = f"FCS Header: {flow_data.channels}"
+
+            # Get list of channels
+            channels = flow_data.channels
+            channel_select = document.getElementById("channel_select")
+            channel_select.innerHTML = ""  # Clear existing options
+            for channel_number, channel_name in channels.items():
+                option = document.createElement("option")
+                option.value = channel_number
+                option.text = channel_name['PnN']
+                channel_select.appendChild(option)
+
+            events = np.reshape(flow_data.events, (-1, flow_data.channel_count))
+
+            # Add event listener for channel selection
+            channel_select.addEventListener("change", create_proxy(lambda e: analyze_channel(int(e.target.value), bins_noise_factor)))
+
+            # Add event listener for bins noise factor
+            bins_input = document.getElementById("bins_noise_input")
+            bins_input.addEventListener("input", create_proxy(lambda e: analyze_channel(int(document.getElementById("channel_select").value), int(e.target.value))))
+
+        except Exception as e:
+            document.getElementById("fcs_header").innerHTML = f"Error: {e}"
+
+def analyze_channel(channel_index, bins_noise_factor):
+    try:
+        if 'events' not in globals():
+            document.getElementById("print_output").innerHTML = "No FCS file loaded."
             return
 
-        bins_noise_factor = int(document.getElementById("bins_noise_input").value)
+        data = events[:, channel_index]
 
-        for f in fileList:
-            data = await f.text()
-            df = pd.read_csv(io.StringIO(data))
-            column_name = df.columns[0]
-            noise = df[column_name]
+        # Filter data
+        noise = data[(data > 1) & (data < 100000)]
 
-            noise = noise[noise > 1]
-            noise = noise[noise < 100000]
+        # Fit Gaussian
+        bins, bin_edges, amplitude_fit, mean_fit, stddev_fit = fit(noise, factor=bins_noise_factor)
+        y_fit = gaussian(bin_edges[:-1], amplitude_fit, mean_fit, stddev_fit)
 
-            bins, bin_edges, amplitude_fit, mean_fit, stddev_fit = fit(noise, factor=bins_noise_factor)
-            y_fit = gaussian(bin_edges[:-1], amplitude_fit, mean_fit, stddev_fit)
+        lod = mean_fit + (4 * stddev_fit)
+        document.getElementById("mean").innerHTML = f"mean (a.u.): {mean_fit}"
+        document.getElementById("std").innerHTML = f"std (a.u.): {stddev_fit}"
+        document.getElementById("lod").innerHTML = f"LOD (a.u.): {lod}"
 
-            lod = mean_fit + (4 * stddev_fit)
-            document.getElementById("mean").innerHTML = f"mean (a.u.): {mean_fit}"
-            document.getElementById("std").innerHTML = f"std (a.u.): {stddev_fit}"
+        plt.figure()
+        plt.xlabel(f"Channel {channel_index + 1} (a.u.)")
+        plt.ylabel('Counts')
+        plt.xlim(np.min(noise), mean_fit + (10 * stddev_fit))
+        plt.plot(bin_edges[:-1], bins, label='Data')
+        plt.plot(bin_edges[:-1], y_fit, label='Gaussian fit')
+        plt.axvline(lod, c='red', linestyle='--', label='lod')
+        plt.legend()
 
-            document.getElementById("lod").innerHTML = f"LOD (a.u.): {lod}"
+        from pyodide.http import pyfetch
+        import js
+        from io import BytesIO
+        import base64
 
-            plt.figure()
-            plt.xlabel(column_name + " (a.u.)")
-            plt.ylabel('Counts')
-            plt.xlim(np.min(noise), mean_fit + (10 *stddev_fit))
-            plt.plot(bin_edges[:-1], bins, label='Data')
-            plt.plot(bin_edges[:-1], y_fit, label='Gaussian fit')
-            plt.axvline(lod, c='red', linestyle='--', label='lod')
-            plt.legend()
+        buf = BytesIO()
+        plt.savefig(buf, format='png')
+        plt.close()
+        buf.seek(0)
 
-            from pyodide.http import pyfetch
-            import js
-            from io import BytesIO
-            import base64
+        img_str = base64.b64encode(buf.read()).decode("utf-8")
+        img_element = document.createElement("img")
+        img_element.src = "data:image/png;base64," + img_str
+        document.getElementById("graph-area").innerHTML = ""
+        document.getElementById("graph-area").appendChild(img_element)
 
-            buf = BytesIO()
-            plt.savefig(buf, format='png')
-            plt.close()
-            buf.seek(0)
+    except Exception as e:
+        document.getElementById("print_output").innerHTML = f"Error: {e}"
 
-            img_str = base64.b64encode(buf.read()).decode("utf-8")
-            img_element = document.createElement("img")
-            img_element.src = "data:image/png;base64," + img_str
-            document.getElementById("graph-area").innerHTML = ""
-            document.getElementById("graph-area").appendChild(img_element)
+def main():
+    file_event = create_proxy(process_file)
+    e = document.getElementById("myfile")
+    e.addEventListener("change", file_event, False)
 
-    def main():
-        file_event = create_proxy(process_file)
-        bins_event = create_proxy(process_file)
-
-        e = document.getElementById("myfile")
-        e.addEventListener("change", file_event, False)
-
-        bins_input = document.getElementById("bins_noise_input")
-        bins_input.addEventListener("input", bins_event, False)
-
-    main()
-    </py-script>
-  </body>
+main()
+  </py-script>
+</body>
 </html>
