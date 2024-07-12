@@ -7,19 +7,33 @@
     <link rel="stylesheet" href="https://pyscript.net/alpha/pyscript.css" />
     <script defer src="https://pyscript.net/alpha/pyscript.js"></script>
   </head>
+  <style>
+      h1 {
+       font-size: 20px;
+       text-transform: uppercase;
+       text-align: center;
+       margin: 0 0 35px 0;
+       text-shadow: 0px 1px 0px #f2f2f2;
+         }
+       </style>
   <body>
-    <label for="myfile">Select a file:</label>
+    <h1>Tool for fitting background noise of a flow cytometer</h1>
+
+    <label for="myfile">Select an csv file containing your background noise:</label>
     <input type="file" id="myfile" name="myfile">
     <br />
     <br />
     <label for="bins_noise_input">Bins Noise Factor:</label>
-    <input type="number" id="bins_noise_input" name="bins_noise_input" value="10">
+    <input type="number" id="bins_noise_input" name="bins_noise_input" value="10"  style="background-color:DodgerBlue;">
     <br />
     <br />
     <div id="print_output"></div>
     <br />
     <p>File Content:</p>
-      <div id="content"></div>
+      <div id="mean"></div>
+      <div id="std"></div>
+
+      <div id="lod"></div>
       <div id="graph-area"></div>
 
 
@@ -78,12 +92,16 @@
             y_fit = gaussian(bin_edges[:-1], amplitude_fit, mean_fit, stddev_fit)
 
             lod = mean_fit + (4 * stddev_fit)
-            document.getElementById("content").innerHTML = f"LOD: {lod}"
+            document.getElementById("mean").innerHTML = f"mean (a.u.): {mean_fit}"
+            document.getElementById("std").innerHTML = f"std (a.u.): {stddev_fit}"
+
+            document.getElementById("lod").innerHTML = f"LOD (a.u.): {lod}"
 
             plt.figure()
             plt.xlim(0, 2*lod)
             plt.plot(bin_edges[:-1], bins, label='Data')
             plt.plot(bin_edges[:-1], y_fit, label='Gaussian fit')
+            plt.axvline(lod, c='red', linestyle='--', label='lod')
             plt.legend()
 
             from pyodide.http import pyfetch
