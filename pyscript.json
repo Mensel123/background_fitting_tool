@@ -1,3 +1,3 @@
 {
-    "packages": ["flowio"]
+    "packages": ["flowio", "pandas"]
 }
