@@ -1,25 +1,104 @@
-<!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-      <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width,initial-scale=1" />
-      <title>🦜 Polyglot - Piratical PyScript</title>
-      <script type="module" src="https://pyscript.net/releases/2023.11.1/core.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>File System Examples</title>
+    <link rel="stylesheet" href="https://pyscript.net/alpha/pyscript.css" />
+    <script defer src="https://pyscript.net/alpha/pyscript.js"></script>
   </head>
   <body>
-    <h1>Background noise fitting tool</h1>
-    <label for="myfile">Select a csv file with your background noise data:</label>
-    
-    <input type="file" id="fileinput" name="fileInput"/>
+    <label for="myfile">Select a file:</label>
+    <input type="file" id="myfile" name="myfile">
     <br />
     <br />
     <div id="print_output"></div>
     <br />
-    <p>File Header:</p>
-    <div id="content">
-    </div>
+    <p>File Content:</p>
+      <div id="content"></div>
+      <div id="graph-area"></div>
 
-    <script type="py" src="./main.py" config="./pyscript.json"></script>
+    <py-env>
+      - pandas
+      - scipy
+      - numpy
+      - matplotlib
+    </py-env>
+
+    <py-script output="print_output">
+    import asyncio
+    from js import document, FileReader
+    from pyodide import create_proxy
+    import pandas as pd
+    import io
+
+    import numpy as np
+    from scipy.optimize import curve_fit
+    import matplotlib.pyplot as plt
+
+    def gaussian(x, amplitude, mean, stddev):
+        return amplitude * np.exp(-(x - mean)**2 / (2 * stddev**2))
+
+    def fit(noise, factor=1):
+        bins_noise = noise.max() - noise.min()
+        bins, bin_edges = np.histogram(noise, bins=int(bins_noise / factor))
+        
+        initial_amplitude = np.max(bins)
+        initial_std = np.std(noise)
+        initial_mean = np.mean(noise)
+
+        initial_guess = [initial_amplitude, initial_mean, initial_std]
+        params, covariance = curve_fit(gaussian, bin_edges[:-1], bins, p0=initial_guess)
+
+        amplitude_fit, mean_fit, stddev_fit = params
+
+        return bins, bin_edges, amplitude_fit, mean_fit, stddev_fit
+
+    async def process_file(event):
+        fileList = event.target.files.to_py()
+
+        for f in fileList:
+            data = await f.text()
+            df = pd.read_csv(io.StringIO(data))
+            noise = df['Large Angle Light Scatter']
+
+            noise = noise[noise > 1]
+            noise = noise[noise < 100000]
+
+            bins, bin_edges, amplitude_fit, mean_fit, stddev_fit = fit(noise, factor=10)
+            y_fit = gaussian(bin_edges[:-1], amplitude_fit, mean_fit, stddev_fit)
+
+            lod = mean_fit + (4 * stddev_fit)
+            document.getElementById("content").innerHTML = f"LOD (a.u.): {lod}"
+
+            plt.figure()
+            plt.xlim(0, 2*lod)
+            plt.plot(bin_edges[:-1], bins, label='Data')
+            plt.plot(bin_edges[:-1], y_fit, label='Gaussian fit')
+            plt.legend()
+
+            from pyodide.http import pyfetch
+            import js
+            from io import BytesIO
+            import base64
+
+            buf = BytesIO()
+            plt.savefig(buf, format='png')
+            plt.close()
+            buf.seek(0)
+
+            img_str = base64.b64encode(buf.read()).decode("utf-8")
+            img_element = document.createElement("img")
+            img_element.src = "data:image/png;base64," + img_str
+            document.getElementById("graph-area").innerHTML = ""
+            document.getElementById("graph-area").appendChild(img_element)
+
+    def main():
+        file_event = create_proxy(process_file)
+        e = document.getElementById("myfile")
+        e.addEventListener("change", file_event, False)
+
+    main()
+    </py-script>
   </body>
-  
 </html>
