@@ -15,6 +15,7 @@
        margin: 0 0 35px 0;
        text-shadow: 0px 1px 0px #f2f2f2;
          }
+
        </style>
   <body>
     <h1>Tool for fitting background noise of a flow cytometer</h1>
@@ -29,13 +30,23 @@
     <br />
     <div id="print_output"></div>
     <br />
-    <p>File Content:</p>
+    <p>Fittings results:</p>
       <div id="mean"></div>
       <div id="std"></div>
 
       <div id="lod"></div>
       <div id="graph-area"></div>
-
+    <br/>
+    <br/>
+    <p>
+        Steps taken
+    </p>
+    <ol>
+        <li>1. Determine approximate mean, height, and standard deviation</li>
+        <li>2. Fit gaussian function with approximate values as starting point</li>
+        <li>3. Determine mean and standard deviation based on fit</li>
+        <li>4. Calculate LoD: mean + 4*std</li>
+    </ol>
 
     <py-env>
       - pandas
