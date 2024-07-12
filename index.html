@@ -83,7 +83,8 @@
         for f in fileList:
             data = await f.text()
             df = pd.read_csv(io.StringIO(data))
-            noise = df['Large Angle Light Scatter']
+            column_name = df.columns[0]
+            noise = df[column_name]
 
             noise = noise[noise > 1]
             noise = noise[noise < 100000]
@@ -98,7 +99,9 @@
             document.getElementById("lod").innerHTML = f"LOD (a.u.): {lod}"
 
             plt.figure()
-            plt.xlim(0, 2*lod)
+            plt.xlabel(column_name + " (a.u.)")
+            plt.ylabel('Counts')
+            plt.xlim(np.min(noise), mean_fit + (10 *stddev_fit))
             plt.plot(bin_edges[:-1], bins, label='Data')
             plt.plot(bin_edges[:-1], y_fit, label='Gaussian fit')
             plt.axvline(lod, c='red', linestyle='--', label='lod')
